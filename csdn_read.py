@@ -9,14 +9,13 @@ import requests
 from bs4 import BeautifulSoup
 
 
-user='sinat_21302587'
 
 
 headers = {
     'User-Agent':
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_0) AppleWebKit/535.11 (KHTML, like Gecko) Chrome/17.0.963.56 Safari/535.11',
     'Accept-Language': 'zh-CN',
-           'Referer': '',}
+           'Referer': 'http://blog.csdn.net/?ref=toolbar'}
 
 useragent=[
 'sogou spider(http://www.sogou.com/search/spider.htm)',
@@ -45,6 +44,11 @@ useragent=[
 'Mozilla/5.0 (iPhone; CPU iPhone OS 10_2_1 like Mac OS X) AppleWebKit/602.4.6 (KHTML, like Gecko) Mobile/14D27 Wifiwx 3.1.2 (m2oapp 1.0.1) m2oSmartCity_Wifiwx m2oSmartCity_wifiwx'
 ]
 
+data = {"username":"",
+        "password":"",
+        "lt":"",
+        "execution":"",
+        "_eventId":"submit"}
 
 def creat_head():
     for i in useragent:
@@ -67,10 +71,7 @@ def get_articles():
         print html.url
         soup = BeautifulSoup(html.content, "lxml")
         article_list =soup.find_all(class_="list_item list_view")
-
         for article in article_list:
-            # article_title= 1
-            # article_manage = 3
             article_titles, article_manages = article.contents[1],article.contents[3]
             # 文章url
             article_url =  article_titles.contents[3].a['href']
@@ -80,27 +81,60 @@ def get_articles():
             # 阅读数
             read_num = re.search(r'[1-9]\d*',article_manages.contents[3].text).group()
             article_dict[article_url]=read_num
-
     return article_dict
+
+def login_to_get_info():
+    session = requests.session()
+    html = session.get('https://passport.csdn.net/account/login?from=http://my.csdn.net/my/mycsdn')
+    soup = BeautifulSoup(html.content, "lxml")
+    for input in soup.form.find_all("input"):
+        if input.get("name") == "lt":
+            data['lt'] = input.get("value")
+        if input.get("name") == "execution":
+            data['execution'] = input.get("value")
+    data['username'],data['password']=account, password
+    html = session.post('http://passport.csdn.net/account/login?from=http://my.csdn.net/my/mycsdn', data=data,headers=headers)
+    print html.content
+    if "登录" in html.content:
+        print "登录失败，请检查账号密码"
+        return 1
+    else:
+        print  "登录成功"
+        info = json.loads(re.search(r'data = ({.*})',html.content).group(1))
+        for key in info.keys():
+            print key, "：", info[key]
+
+        return info['userName']
+
+
 
 def start_read():
     for key,value in article_dict.items():
         if int(value) < random.randint(5000, 10000):
             random_num = random.randint(50, 99)
-            print random_num
             for i in range(random_num):
                 headers['User-Agent'] = random.sample(useragent,1)[0]
                 html = requests.get('http://blog.csdn.net%s'%key,headers=headers)
+            soup = BeautifulSoup(html.content, "lxml")
+            print soup.title.string, "增加随机阅读次数", random_num
 
 
-
-
-
-
-
-    # print article_list,len(article_list)
-    #         print article.text
 
 if __name__ == '__main__':
+
+    user=''
+    if user:
+        time_start = time.time()
+    else:
+        account = raw_input('请输入登录邮箱或手机号：')
+        password = raw_input('请输入密码：')
+        time_start = time.time()
+        user = login_to_get_info()
+        if user == 1:
+            print "运行失败"
+        else:
+            user
     article_dict = get_articles()
     start_read()
+    time_end = time.time()
+    print "此次运行耗时 %s 秒"%(time_end - time_start)
